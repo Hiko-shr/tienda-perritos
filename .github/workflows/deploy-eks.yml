@@ -10,9 +10,9 @@ env:
   ECR_REPO_FRONTEND: tienda-frontend
   ECR_REPO_BACKEND: tienda-backend
   ECR_REPO_DB: tienda-db
-  ECS_CLUSTER: tienda-perritos-cluster       # <-- Pon aquí el nombre de tu Clúster ECS
-  ECS_SERVICE_FRONTEND: tienda-frontend-service # <-- Pon aquí el nombre de tu Servicio Frontend
-  ECS_SERVICE_BACKEND: tienda-backend-service   # <-- Pon aquí el nombre de tu Servicio Backend
+  ECS_CLUSTER: tienda-perritos-cluster         # Nombre de tu Clúster ECS
+  ECS_SERVICE_FRONTEND: tienda-frontend-service # Nombre de tu Servicio Frontend
+  ECS_SERVICE_BACKEND: tienda-backend-service   # Nombre de tu Servicio Backend
 
 jobs:
   build-and-deploy:
@@ -63,8 +63,8 @@ jobs:
       # Forzamos a ECS a reiniciar las tareas para que descarguen las imágenes recién subidas
       - name: Desplegar Backend en ECS
         run: |
-          aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_SERVICE_BACKEND }} --force-new-deployment
+          aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_SERVICE_BACKEND }} --force-new-deployment --region ${{ env.AWS_REGION }}
 
       - name: Desplegar Frontend en ECS
         run: |
-          aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_SERVICE_FRONTEND }} --force-new-deployment
+          aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_SERVICE_FRONTEND }} --force-new-deployment --region ${{ env.AWS_REGION }}
