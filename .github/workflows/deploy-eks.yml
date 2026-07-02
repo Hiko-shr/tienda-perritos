@@ -1,4 +1,4 @@
-name: CI/CD Tienda Perritos EKS
+name: CI/CD Tienda Perritos ECS
 
 on:
   push:
@@ -6,10 +6,13 @@ on:
   workflow_dispatch: {}
 
 env:
-  # Repos de ECR (no son secretos, solo nombres)
+  AWS_REGION: us-east-1
   ECR_REPO_FRONTEND: tienda-frontend
   ECR_REPO_BACKEND: tienda-backend
   ECR_REPO_DB: tienda-db
+  ECS_CLUSTER: tienda-perritos-cluster       # <-- Pon aquí el nombre de tu Clúster ECS
+  ECS_SERVICE_FRONTEND: tienda-frontend-service # <-- Pon aquí el nombre de tu Servicio Frontend
+  ECS_SERVICE_BACKEND: tienda-backend-service   # <-- Pon aquí el nombre de tu Servicio Backend
 
 jobs:
   build-and-deploy:
@@ -24,109 +27,44 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
 
       - name: Login a Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Definir tag de imagen
-        run: echo "IMAGE_TAG=${GITHUB_SHA::7}" >> $GITHUB_ENV
-
-      # ---------- FRONTEND ----------
-      - name: Build & push FRONTEND
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        run: |
-          cd frontend
-          docker build -t $ECR_REGISTRY/${ECR_REPO_FRONTEND}:${{ env.IMAGE_TAG }} .
-          docker push $ECR_REGISTRY/${ECR_REPO_FRONTEND}:${{ env.IMAGE_TAG }}
-
-      # ---------- BACKEND ----------
-      - name: Build & push BACKEND
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        run: |
-          cd backend
-          docker build -t $ECR_REGISTRY/${ECR_REPO_BACKEND}:${{ env.IMAGE_TAG }} .
-          docker push $ECR_REGISTRY/${ECR_REPO_BACKEND}:${{ env.IMAGE_TAG }}
-
-      # ---------- DB (opcional) ----------
+      # ---------- COMPILAR Y SUBIR IMÁGENES A ECR ----------
       - name: Build & push DB
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           cd db
-          docker build -t $ECR_REGISTRY/${ECR_REPO_DB}:${{ env.IMAGE_TAG }} .
-          docker push $ECR_REGISTRY/${ECR_REPO_DB}:${{ env.IMAGE_TAG }}
+          docker build -t $ECR_REGISTRY/${{ env.ECR_REPO_DB }}:latest .
+          docker push $ECR_REGISTRY/${{ env.ECR_REPO_DB }}:latest
 
-      # ---------- Instalar kubectl ----------
-      - name: Instalar kubectl
-        uses: azure/setup-kubectl@v4
-        with:
-          version: v1.29.0
-
-      # ---------- Configurar kubeconfig de EKS ----------
-      - name: Configurar kubeconfig para EKS
-        env:
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
-        run: |
-          aws eks update-kubeconfig \
-            --region $AWS_REGION \
-            --name $EKS_CLUSTER_NAME
-          kubectl config current-context
-
-      # ---------- Aplicar manifests base ----------
-      - name: Aplicar manifests base (namespace, DB, servicios)
-        env:
-          EKS_NAMESPACE: ${{ secrets.EKS_NAMESPACE }}
-        run: |
-          kubectl apply -f k8s/namespace.yaml
-          kubectl apply -f k8s/mysql-secret.yaml -n $EKS_NAMESPACE
-          kubectl apply -f k8s/mysql-deployment.yaml -n $EKS_NAMESPACE
-          kubectl apply -f k8s/mysql-service.yaml -n $EKS_NAMESPACE
-
-      # ---------- Actualizar BACKEND en EKS ----------
-      - name: Actualizar BACKEND en EKS
+      - name: Build & push BACKEND
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          EKS_NAMESPACE: ${{ secrets.EKS_NAMESPACE }}
         run: |
-          kubectl apply -f k8s/backend-deployment.yaml -n $EKS_NAMESPACE
-          kubectl apply -f k8s/backend-service.yaml -n $EKS_NAMESPACE
-          kubectl set image deployment/tienda-backend \
-            backend=$ECR_REGISTRY/${ECR_REPO_BACKEND}:${{ env.IMAGE_TAG }} \
-            -n $EKS_NAMESPACE
-          kubectl rollout status deployment/tienda-backend -n $EKS_NAMESPACE
+          cd backend
+          docker build -t $ECR_REGISTRY/${{ env.ECR_REPO_BACKEND }}:latest .
+          docker push $ECR_REGISTRY/${{ env.ECR_REPO_BACKEND }}:latest
 
-      # ---------- Actualizar FRONTEND en EKS ----------
-      - name: Actualizar FRONTEND en EKS
+      - name: Build & push FRONTEND
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          EKS_NAMESPACE: ${{ secrets.EKS_NAMESPACE }}
         run: |
-          kubectl apply -f k8s/frontend-deployment.yaml -n $EKS_NAMESPACE
-          kubectl apply -f k8s/frontend-service.yaml -n $EKS_NAMESPACE
-          kubectl set image deployment/tienda-frontend \
-            frontend=$ECR_REGISTRY/${ECR_REPO_FRONTEND}:${{ env.IMAGE_TAG }} \
-            -n $EKS_NAMESPACE
-          kubectl rollout status deployment/tienda-frontend -n $EKS_NAMESPACE
+          cd frontend
+          docker build -t $ECR_REGISTRY/${{ env.ECR_REPO_FRONTEND }}:latest .
+          docker push $ECR_REGISTRY/${{ env.ECR_REPO_FRONTEND }}:latest
 
-      # ---------- HPA (si existen los YAML) ----------
-      - name: Aplicar HPA (opcional)
-        env:
-          EKS_NAMESPACE: ${{ secrets.EKS_NAMESPACE }}
+      # ---------- DESPLIEGUE AUTOMATIZADO EN ECS ----------
+      # Forzamos a ECS a reiniciar las tareas para que descarguen las imágenes recién subidas
+      - name: Desplegar Backend en ECS
         run: |
-          if [ -f k8s/backend-hpa.yaml ]; then kubectl apply -f k8s/backend-hpa.yaml -n $EKS_NAMESPACE; fi
-          if [ -f k8s/frontend-hpa.yaml ]; then kubectl apply -f k8s/frontend-hpa.yaml -n $EKS_NAMESPACE; fi
+          aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_SERVICE_BACKEND }} --force-new-deployment
 
-      # ---------- Ver estado final ----------
-      - name: Ver pods y servicios
-        env:
-          EKS_NAMESPACE: ${{ secrets.EKS_NAMESPACE }}
+      - name: Desplegar Frontend en ECS
         run: |
-          kubectl get pods -n $EKS_NAMESPACE
-          kubectl get svc -n $EKS_NAMESPACE
-          kubectl get hpa -n $EKS_NAMESPACE || true
+          aws ecs update-service --cluster ${{ env.ECS_CLUSTER }} --service ${{ env.ECS_SERVICE_FRONTEND }} --force-new-deployment
