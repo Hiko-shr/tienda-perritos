@@ -40,8 +40,8 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           cd frontend
-          docker build -t $ECR_REGISTRY/${ECR_REPO_FRONTEND}:${IMAGE_TAG} .
-          docker push $ECR_REGISTRY/${ECR_REPO_FRONTEND}:${IMAGE_TAG}
+          docker build -t $ECR_REGISTRY/${ECR_REPO_FRONTEND}:${{ env.IMAGE_TAG }} .
+          docker push $ECR_REGISTRY/${ECR_REPO_FRONTEND}:${{ env.IMAGE_TAG }}
 
       # ---------- BACKEND ----------
       - name: Build & push BACKEND
@@ -49,8 +49,8 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           cd backend
-          docker build -t $ECR_REGISTRY/${ECR_REPO_BACKEND}:${IMAGE_TAG} .
-          docker push $ECR_REGISTRY/${ECR_REPO_BACKEND}:${IMAGE_TAG}
+          docker build -t $ECR_REGISTRY/${ECR_REPO_BACKEND}:${{ env.IMAGE_TAG }} .
+          docker push $ECR_REGISTRY/${ECR_REPO_BACKEND}:${{ env.IMAGE_TAG }}
 
       # ---------- DB (opcional) ----------
       - name: Build & push DB
@@ -58,8 +58,8 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           cd db
-          docker build -t $ECR_REGISTRY/${ECR_REPO_DB}:${IMAGE_TAG} .
-          docker push $ECR_REGISTRY/${ECR_REPO_DB}:${IMAGE_TAG}
+          docker build -t $ECR_REGISTRY/${ECR_REPO_DB}:${{ env.IMAGE_TAG }} .
+          docker push $ECR_REGISTRY/${ECR_REPO_DB}:${{ env.IMAGE_TAG }}
 
       # ---------- Instalar kubectl ----------
       - name: Instalar kubectl
@@ -97,7 +97,7 @@ jobs:
           kubectl apply -f k8s/backend-deployment.yaml -n $EKS_NAMESPACE
           kubectl apply -f k8s/backend-service.yaml -n $EKS_NAMESPACE
           kubectl set image deployment/tienda-backend \
-            backend=$ECR_REGISTRY/${ECR_REPO_BACKEND}:${IMAGE_TAG} \
+            backend=$ECR_REGISTRY/${ECR_REPO_BACKEND}:${{ env.IMAGE_TAG }} \
             -n $EKS_NAMESPACE
           kubectl rollout status deployment/tienda-backend -n $EKS_NAMESPACE
 
@@ -110,7 +110,7 @@ jobs:
           kubectl apply -f k8s/frontend-deployment.yaml -n $EKS_NAMESPACE
           kubectl apply -f k8s/frontend-service.yaml -n $EKS_NAMESPACE
           kubectl set image deployment/tienda-frontend \
-            frontend=$ECR_REGISTRY/${ECR_REPO_FRONTEND}:${IMAGE_TAG} \
+            frontend=$ECR_REGISTRY/${ECR_REPO_FRONTEND}:${{ env.IMAGE_TAG }} \
             -n $EKS_NAMESPACE
           kubectl rollout status deployment/tienda-frontend -n $EKS_NAMESPACE
 
