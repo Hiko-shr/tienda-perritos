@@ -3,10 +3,10 @@ const cors = require("cors");
 const mysql = require("mysql2/promise");
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 8080; // Cambiado a 8080 para sincronizar con AWS y Dockerfile
 
 const {
-  DB_HOST = tienda-db, // acá resuelve internamente en eks
+  DB_HOST = "tienda-db", // ¡Corregido! Ahora tiene las comillas correspondientes
   DB_USER = "root",
   DB_PASSWORD = "admin123",
   DB_NAME = "tienda_perritos",
@@ -128,7 +128,7 @@ app.delete("/api/productos/:id", async (req, res) => {
   }
 });
 
-// Endpoint de salud para Kubernetes
+// Endpoint de salud para Kubernetes / ECS
 app.get("/api/health", (req, res) => {
   res.status(200).json({
     status: "ok",
