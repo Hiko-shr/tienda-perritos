@@ -3,5 +3,5 @@ WORKDIR /app
 COPY package.json .
 COPY server.js .
 RUN npm install --production
-EXPOSE 3001
+EXPOSE 8080
 CMD ["node","server.js"]
