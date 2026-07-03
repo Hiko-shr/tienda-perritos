@@ -12,4 +12,4 @@ ENV MYSQL_PASSWORD=alumno123
 COPY init.sql /docker-entrypoint-initdb.d/
 
 # Exponer el puerto de MySQL
-EXPOSE 8080
+EXPOSE 3306
